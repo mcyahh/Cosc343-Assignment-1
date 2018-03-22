@@ -26,10 +26,14 @@ white_average = 0
 black_stdev = 5
 white_stdev = 0
 
+
+
+SAMPLE_COUNT = 10
+
 samples = deque([])
 lcd = Screen()
 
-def print_stuff(text, time = 6):
+def print_stuff(text, time = 0):
     lcd.clear()
     lcd.draw.text((36, 80), text)
     lcd.update()
@@ -58,7 +62,7 @@ def calc_av(samples):
     av = av / len(samples)
     return av
 
-def push_sample(sample, max_samples = 100):
+def push_sample(sample, max_samples = SAMPLE_COUNT):
     global samples
     while (len(samples) >= max_samples):
         samples.popleft()
@@ -86,7 +90,7 @@ def is_on_white(average):
 
 def calc_current():
     this_samples = []
-    for i in range(1000):
+    for i in range(SAMPLE_COUNT):
         this_samples.append(sample())
     this_av = calc_av(this_samples)
     this_stdev = calc_stdev(this_samples, this_av)
@@ -95,26 +99,64 @@ def calc_current():
 average = 0
 stdev = 0
 
+black_tile_count = 0
+
+def rotate(angle):
+    mC.run_to_rel_pos(speed_sp = 100 * speedMult, position_sp = angle * 3)
+    mB.run_to_rel_pos(speed_sp = 100 * speedMult, position_sp=-angle * 3)
+
+def move_to_next_black():
+    global black_tile_count
+    on_black = True
+    moveForward(50, 360)
+    while(pair.is_running):
+        (av,std) = calc_current()
+        print_stuff("READING: "+str(av))
+        if is_on_white(av) and on_black:
+            on_black = False
+        if not on_black:
+            print_stuff("ON WHITE")
+        if is_on_black(av) and not on_black:
+            black_tile_count += 1
+            pair.stop()
+            Sound.beep()
+            return True
+    return False
+
+
+def sweep(angle, steps = 30):
+    step = angle/steps
+    count = 0
+    for i in range(steps):
+        rotate(step)
+        count += 1
+        (av, stdev) = calc_current()
+        if is_on_white(av):
+            break
+
+    rotate(-count*step)
+    if count == steps -1:
+        return 0
+    return step * count
+
+def sweep_check():
+    #we are on a black tile, sweep for a white tile
+    valL = sweep(-90)
+    valR = sweep(90)
+    val = valL + 90 if abs(valL) < abs(valR) else valR - 90
+    rotate(val/3)
+
+
+btn = Button()
+
 try:
-    moveForward(10, 360)
-    (white_average, white_stdev) = calc_current()
-
-    print_stuff('Av: ' + str(white_average) + ' STD: ' + str(white_stdev))
-    Sound.beep()
-
-    btn = Button()
-
     while True:
-
-        push_sample(sample())
-        average = calc_av(samples)
-
-        if is_on_black(average):
-            print_stuff("BLACK " + str(average), 0.01)
-        elif is_on_white(average):
-            print_stuff("WHITE "+ str(average), 0.01)
-        else:
-            print_stuff("GREY "+ str(average), 0.01)
+        if move_to_next_black():
+            sweep_check()
+        if black_tile_count == 15:
+            for i in range(5):
+                Sound.beep()
+            break
 except:
     import traceback
     exc_type, exc_value, exc_traceback = sys.exc_info()

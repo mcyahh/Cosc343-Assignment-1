@@ -2,12 +2,13 @@
 
 
 from helper import LargeMotorPair
+from collections import deque
 import logging
 import math
 import os
 import re
 import sys
-import time
+from time import sleep
 
 from ev3dev.ev3 import *
 
@@ -28,7 +29,16 @@ cl.mode='COL-REFLECT'
 btn = Button() # will use any button to stop script
 
 sweepAngle = 10
-speedMult = 5
+speedMult = 2
+
+
+lcd = Screen()
+
+def print_stuff(text, time = 6):
+    lcd.clear()
+    lcd.draw.text((36, 80), text)
+    lcd.update()
+    sleep(time)
 
 def doStop():
     return btn.any()
@@ -36,8 +46,49 @@ def doStop():
 def isColliding():
     return True if ts.value() > 0.1 else False
 
+
+samples = deque([])
+
+def sample():
+    return cl.value()
+
+black_average = 10
+black_stdev = 5
+
+white_average = 45
+white_stdev = 0
+
+def calc_av(samples):
+    if(len(samples) == 0):
+        return 0
+    av = 0
+    for sample in samples:
+        av += sample
+    av = av / len(samples)
+    print_stuff("Average "+str(av),0)
+    return av
+
+def push_sample(sample, max_samples = 10):
+    global samples
+    while (len(samples) >= max_samples):
+        samples.popleft()
+    samples.append(sample)
+
+def is_on_black(average):
+    if average < black_average + 2*black_stdev:
+        return True
+    return False
+
+def is_on_white(average):
+    if average > white_average - 2*white_stdev:
+        return True
+    return False
+
 def isOnTrack():
-    if cl.value() < 30:
+    for i in range(10):
+        push_sample(sample())
+    average = calc_av(samples)
+    if is_on_black(average) or is_on_white(average):
         return True
     else:
         return False
@@ -78,21 +129,30 @@ def moveForward(speed = 100, len = 360):
     pair.run_to_rel_pos(speed_sp = speed * speedMult, position_sp = len)
     Leds.set_color(Leds.LEFT, Leds.GREEN)
 
-Leds.all_off()
 
-while (not btn.any()):
-    time.sleep(0.1)
-time.sleep(.5)
-while True :
-    if doStop():
-        break
 
-    if isOnTrack():
-        moveForward()
-    else:
-        lookForTrack()
-    if isColliding():
-        goAround()
+try:
+    Leds.all_off()
+    while (not btn.any()):
+        time.sleep(0.1)
+    time.sleep(.5)
+    while True:
+        if doStop():
+            break
+
+        if isOnTrack():
+            moveForward()
+        else:
+            lookForTrack()
+
+        if isColliding():
+            goAround()
+except:
+    import traceback
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
+    while not btn.any():
+        pass
 
 pair.stop()
 Leds.set_color(Leds.LEFT, Leds.RED)
