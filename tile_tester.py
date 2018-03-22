@@ -2,7 +2,6 @@
 from ev3dev.ev3 import *
 from time import sleep
 from helper import LargeMotorPair
-import ev3dev.ev3 as ev3
 from collections import deque
 import math
 
@@ -10,6 +9,16 @@ import math
 cl = ColorSensor()
 # Connect EV3 color sensor.
 cl = ColorSensor()
+#Connect to sonar
+sn = UltrasonicSensor()
+assert sn.connected, "Connect a single US sensor to any sensor port"
+# Put the US sensor into distance mode.
+us.mode='US-DIST-CM'
+
+units = us.units
+# reports 'cm' even though the sensor measures 'mm'
+
+
 pair = LargeMotorPair(OUTPUT_B, OUTPUT_C)
 pair.reset()
 
@@ -101,6 +110,29 @@ stdev = 0
 
 black_tile_count = 0
 
+
+def sweep_sonar(angle, steps = 30):
+    step = angle / steps
+    count = 0
+    min = float('inf')
+    for i in range(steps):
+        rotate(step)
+        pair.wait_until_not_moving()
+        count += 1
+        dist = sn.value()
+        if dist>min:
+            count = i
+            min = dist
+    rotate(-angle)
+
+    return (count * step, min)
+
+def sonar_find_min():
+    (langle, lval) = sweep_sonar(-90)
+    (rangle, rrow) = sweep_sonar(90)
+    angle = langle if lval < rval else rangle
+    rotate(angle)
+    pair.wait_until_not_moving()
 def rotate(angle):
     mC.run_to_rel_pos(speed_sp = 100 * speedMult, position_sp = angle * 3)
     mB.run_to_rel_pos(speed_sp = 100 * speedMult, position_sp=-angle * 3)
@@ -129,6 +161,7 @@ def sweep(angle, steps = 30):
     count = 0
     for i in range(steps):
         rotate(step)
+        pair.wait_until_not_moving()
         count += 1
         (av, stdev) = calc_current()
         if is_on_white(av):
@@ -163,13 +196,6 @@ except:
     traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
     while not btn.any():
         pass
-
-
-
-
-
-
-
 
 
 
