@@ -2,25 +2,36 @@
 from ev3dev.ev3 import *
 from time import sleep
 from helper import LargeMotorPair
+
 from collections import deque
 import math
-
+btn = Button()
 # Connect EV3 color sensor.
 cl = ColorSensor()
 # Connect EV3 color sensor.
 cl = ColorSensor()
-#Connect to sonar
-sn = UltrasonicSensor()
-assert sn.connected, "Connect a single US sensor to any sensor port"
-# Put the US sensor into distance mode.
-us.mode='US-DIST-CM'
+try:
+    #Connect to sonar
+    sn = UltrasonicSensor()
+    assert sn.connected, "Connect a single US sensor to any sensor port"
+    # Put the US sensor into distance mode.
+    sn.mode='US-DIST-CM'
+except:
+    import traceback
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
+    while not btn.any():
+        pass
 
-units = us.units
+
+
+
 # reports 'cm' even though the sensor measures 'mm'
 
 
 pair = LargeMotorPair(OUTPUT_B, OUTPUT_C)
 pair.reset()
+
 
 mB = LargeMotor('outB')
 mC = LargeMotor('outC')
@@ -31,10 +42,9 @@ speedMult = 2
 black_count = 1
 
 black_average = 10
-white_average = 0
+white_average = 45
 black_stdev = 5
-white_stdev = 0
-
+white_stdev = 10
 
 
 SAMPLE_COUNT = 10
@@ -124,33 +134,53 @@ def sweep_sonar(angle, steps = 30):
             count = i
             min = dist
     rotate(-angle)
-
+    pair.wait_until_not_moving()
     return (count * step, min)
 
+def sweep_sonar_smooth(angle):
+    rotate(angle)
+    maxcount = 0
+    count_point = 0
+    min = float('inf')
+    while pair.is_running:
+        maxcount += 1
+        dist = sn.value()
+        if dist > min:
+            count = i
+            min = dist
+            count_point = maxcount
+
+    rotate(-angle)
+    pair.wait_until_not_moving()
+    return ((count_point/maxcount) * angle, min)
+
 def sonar_find_min():
-    (langle, lval) = sweep_sonar(-90)
-    (rangle, rrow) = sweep_sonar(90)
+    (langle, lval) = sweep_sonar_smooth(-90)
+    (rangle, rval) = sweep_sonar_smooth(90)
     angle = langle if lval < rval else rangle
     rotate(angle)
     pair.wait_until_not_moving()
-def rotate(angle):
-    mC.run_to_rel_pos(speed_sp = 100 * speedMult, position_sp = angle * 3)
-    mB.run_to_rel_pos(speed_sp = 100 * speedMult, position_sp=-angle * 3)
+
+
+def rotate(angle, fwd = 0):
+    mC.run_to_rel_pos(speed_sp = 50 * speedMult, position_sp = angle * 3 + fwd)
+    mB.run_to_rel_pos(speed_sp = 50 * speedMult, position_sp=-angle * 3 + fwd)
+
 
 def move_to_next_black():
+    print_stuff("Moving")
     global black_tile_count
     on_black = True
     moveForward(50, 360)
     while(pair.is_running):
         (av,std) = calc_current()
-        print_stuff("READING: "+str(av))
         if is_on_white(av) and on_black:
             on_black = False
-        if not on_black:
-            print_stuff("ON WHITE")
         if is_on_black(av) and not on_black:
             black_tile_count += 1
             pair.stop()
+            moveForward(50, 90)
+            pair.wait_until_not_moving()
             Sound.beep()
             return True
     return False
@@ -160,36 +190,45 @@ def sweep(angle, steps = 30):
     step = angle/steps
     count = 0
     for i in range(steps):
-        rotate(step)
+        rotate(step, 20)
         pair.wait_until_not_moving()
         count += 1
         (av, stdev) = calc_current()
         if is_on_white(av):
             break
-
-    rotate(-count*step)
+    for i in range(count):
+        rotate(-step, -20)
+        pair.wait_until_not_moving()
     if count == steps -1:
-        return 0
+        return angle
     return step * count
 
+
+ROT_ = 180
+
+
 def sweep_check():
+    print_stuff("Sweeping")
     #we are on a black tile, sweep for a white tile
-    valL = sweep(-90)
-    valR = sweep(90)
-    val = valL + 90 if abs(valL) < abs(valR) else valR - 90
+    valL = sweep(-ROT_)
+    valR = sweep(ROT_)
+    val = valL + ROT_ if abs(valL) < abs(valR) else valR - ROT_
     rotate(val/3)
 
 
-btn = Button()
 
 try:
-    while True:
+    while False:
         if move_to_next_black():
             sweep_check()
         if black_tile_count == 15:
             for i in range(5):
                 Sound.beep()
             break
+    while True:
+        sonar_find_min()
+        moveForward(100,90)
+        pair.wait_until_not_moving()
 except:
     import traceback
     exc_type, exc_value, exc_traceback = sys.exc_info()
