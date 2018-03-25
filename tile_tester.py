@@ -117,20 +117,24 @@ stdev = 0
 black_tile_count = 0
 
 
-def sweep_sonar(angle, steps = 30):
+def sweep_sonar(angle, steps = 20):
     step = angle / steps
     count = 0
     min = float('inf')
     for i in range(steps):
-        rotate(step)
-        pair.wait_until_not_moving()
-        count += 1
+        rotate(step,speed=20)
+        pair.wait_until_not_moving(timeout=3000)
+        sleep(0.1)
         dist = sn.value()
-        if dist>min:
+        if dist<min:
             count = i
             min = dist
-    rotate(-angle)
-    pair.wait_until_not_moving()
+        print_stuff("Min Step: "+str(count) + " Min: "+str(min))
+    for i in range(steps):
+        rotate(-step, speed=20)
+        sleep(0.1)
+        pair.wait_until_not_moving(timeout=3000)
+    #pair.wait_until_not_moving(timeout=3000)
     return (count * step, min)
 
 def sweep_sonar_smooth(angle):
@@ -153,14 +157,15 @@ def sweep_sonar_smooth(angle):
     return ((float(count_point)/float(maxcount)) * angle, min)
 
 def sonar_find_min():
-    (langle, lval) = sweep_sonar_smooth(-45)
-    (rangle, rval) = sweep_sonar_smooth(45)
+    Sound.beep()
+    (langle, lval) = sweep_sonar(-45)
+    (rangle, rval) = sweep_sonar(45)
     angle = langle if lval < rval else rangle
 
     if (angle == 0):
-        return
-    rotate(angle)
-    pair.wait_until_not_moving()
+        return min(lval,rval)
+    rotate(angle * 1.1)
+    pair.wait_until_not_moving(timeout=3000)
     return min(lval,rval)
 
 def rotate(angle, fwd = 0, speed = 50):
@@ -172,7 +177,7 @@ def move_to_next_black():
     print_stuff("Moving")
     global black_tile_count
     on_black = True
-    moveForward(50, 720)
+    moveForward(100, 720)
     while(pair.is_running):
         (av,std) = calc_current()
         if is_on_white(av) and on_black:
@@ -180,7 +185,7 @@ def move_to_next_black():
         if is_on_black(av) and not on_black:
             black_tile_count += 1
             pair.stop()
-            moveForward(50, 45)
+            #moveForward(200, 45)
             pair.wait_until_not_moving()
             Sound.speak(black_tile_count)
             return True
@@ -192,14 +197,14 @@ def sweep(angle, steps = 30):
     count = 0
     for i in range(steps):
         rotate(step, 20)
-        pair.wait_until_not_moving()
+        pair.wait_until_not_moving(timeout=3000)
         count += 1
         (av, stdev) = calc_current()
         if is_on_white(av):
             break
     for i in range(count):
         rotate(-step, -20)
-        pair.wait_until_not_moving()
+        pair.wait_until_not_moving(timeout=3000)
     if count == steps -1:
         return angle
     return step * count
@@ -217,17 +222,17 @@ def sweep_check():
     if not val == 0:
         rotate(val/7)
         print_stuff("Val: "+str(val))
-        pair.wait_until_not_moving()
+        pair.wait_until_not_moving(timeout=3000)
 
 
 try:
 
     move_to_next_black()
-    moveForward(50, 30)
+    moveForward(50, 100)
     pair.wait_until_not_moving()
-    rotate(-60)
+    rotate(-55)
     pair.wait_until_not_moving()
-    moveForward((50,-30))
+    moveForward(50,-120)
     pair.wait_until_not_moving()
     sweep_check()
     while True:
@@ -237,41 +242,46 @@ try:
             for i in range(5):
                 Sound.beep()
             break
-    rotate(-60)
+    rotate(-55)
     pair.wait_until_not_moving()
-    moveForward(200,4080)
+    moveForward(400,4000)
     pair.wait_until_not_moving()
+
+
     seek_and_destroy = True
     while seek_and_destroy:
-        val = sonar_find_min()
+        #check if we even need to sweep
+        if (sn.value()>60):
+            val = sonar_find_min()
+        else:
+            val = 0
         print_stuff("MIN: " + str(val))
         Sound.beep()
         #if we are super close
-        if val<40:
+        if val<60:
             seek_and_destroy = False
             Sound.speak("Prepare to die, bottle!")
             sleep(2)
         else:
-            moveForward(400,360)
+            moveForward(200, 360)
+            pair.wait_until_not_moving(timeout=3000)
 
-        while(pair.is_running):
-            #probably wont work
-            if ts.value() > 0.1:
-                pair.stop()
-                seek_and_destroy = False
-                Sound.speak("Prepare to die, bottle!")
-                sleep(0.5)
-                break
 
-    if not sample()>black_average + black_stdev:
-        move_to_next_black()
-    moveForward(500,720)
+    #reverse and ram
+    moveForward(100,-90)
+    pair.wait_until_not_moving(timeout=3000)
+    # check if we are on white, if so, move onto black
+    #if not sample()>black_average + black_stdev:
+    #    move_to_next_black()
+    moveForward(500,1080)
+    sleep(0.5)
+    #push till we are off black
     while pair.is_running:
         if sample()>black_average + black_stdev:
             pair.stop()
             break
     Sound.speak("Victory! Take that bottle!")
-    sleep(1)
+    sleep(3)
 
 except:
     import traceback
