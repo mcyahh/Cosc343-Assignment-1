@@ -120,22 +120,30 @@ black_tile_count = 0
 def sweep_sonar(angle, steps = 20):
     step = angle / steps
     count = 0
-    min = float('inf')
+    minf = float('inf')
     for i in range(steps):
         rotate(step,speed=20)
         pair.wait_until_not_moving(timeout=3000)
+
         sleep(0.1)
-        dist = sn.value()
-        if dist<min:
+
+        dist = float('inf')
+        for j in range(10):
+            dist = min(dist, sn.value())
+            sleep(0.02)
+
+        if dist<minf:
             count = i
-            min = dist
-        print_stuff("Min Step: "+str(count) + " Min: "+str(min))
+            minf = dist
+        print_stuff("Min Step: "+str(count) + " Min: "+str(minf))
+
     for i in range(steps):
         rotate(-step, speed=20)
-        sleep(0.1)
         pair.wait_until_not_moving(timeout=3000)
-    #pair.wait_until_not_moving(timeout=3000)
-    return (count * step, min)
+        sleep(0.1)
+
+
+    return (count * step, minf)
 
 def sweep_sonar_smooth(angle):
     rotate(angle)
@@ -226,7 +234,7 @@ def sweep_check():
 
 
 try:
-
+    '''
     move_to_next_black()
     moveForward(50, 100)
     pair.wait_until_not_moving()
@@ -242,23 +250,23 @@ try:
             for i in range(5):
                 Sound.beep()
             break
-    rotate(-55)
+    rotate(-56)
     pair.wait_until_not_moving()
-    moveForward(400,4000)
+    moveForward(400,3800)
     pair.wait_until_not_moving()
 
-
+    '''
     seek_and_destroy = True
     while seek_and_destroy:
         #check if we even need to sweep
-        if (sn.value()>60):
+        if (sn.value()>220):
             val = sonar_find_min()
         else:
             val = 0
         print_stuff("MIN: " + str(val))
         Sound.beep()
         #if we are super close
-        if val<60:
+        if val<220:
             seek_and_destroy = False
             Sound.speak("Prepare to die, bottle!")
             sleep(2)
@@ -267,14 +275,11 @@ try:
             pair.wait_until_not_moving(timeout=3000)
 
 
-    #reverse and ram
-    moveForward(100,-90)
-    pair.wait_until_not_moving(timeout=3000)
     # check if we are on white, if so, move onto black
     #if not sample()>black_average + black_stdev:
     #    move_to_next_black()
-    moveForward(500,1080)
-    sleep(0.5)
+    moveForward(500,4080)
+    sleep(1)
     #push till we are off black
     while pair.is_running:
         if sample()>black_average + black_stdev:
