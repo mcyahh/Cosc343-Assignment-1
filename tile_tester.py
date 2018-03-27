@@ -233,8 +233,27 @@ def sweep_check():
         pair.wait_until_not_moving(timeout=3000)
 
 
+def seek_bottle():
+    seek_and_destroy = True
+    while seek_and_destroy:
+        # check if we even need to sweep
+        if (sn.value() > 220):
+            val = sonar_find_min()
+        else:
+            val = 0
+        print_stuff("MIN: " + str(val))
+        Sound.beep()
+        # if we are super close
+        if val < 220:
+            seek_and_destroy = False
+            Sound.speak("Prepare to die, bottle!")
+            sleep(2)
+        else:
+            moveForward(200, 360)
+            pair.wait_until_not_moving(timeout=3000)
+
 try:
-    '''
+
     move_to_next_black()
     moveForward(50, 100)
     pair.wait_until_not_moving()
@@ -250,41 +269,33 @@ try:
             for i in range(5):
                 Sound.beep()
             break
-    rotate(-56)
+    rotate(-55)
     pair.wait_until_not_moving()
     moveForward(400,3800)
     pair.wait_until_not_moving()
 
-    '''
-    seek_and_destroy = True
-    while seek_and_destroy:
-        #check if we even need to sweep
-        if (sn.value()>220):
-            val = sonar_find_min()
-        else:
-            val = 0
-        print_stuff("MIN: " + str(val))
-        Sound.beep()
-        #if we are super close
-        if val<220:
-            seek_and_destroy = False
-            Sound.speak("Prepare to die, bottle!")
-            sleep(2)
-        else:
-            moveForward(200, 360)
-            pair.wait_until_not_moving(timeout=3000)
-
+    seek_bottle()
 
     # check if we are on white, if so, move onto black
     #if not sample()>black_average + black_stdev:
     #    move_to_next_black()
-    moveForward(500,4080)
+    moveForward(500, 5000)
     sleep(1)
     #push till we are off black
     while pair.is_running:
+        #if we have gone off course, readjust
+        if sn.value() > 220:
+            moveForward(500,-360)
+            pair.stop()
+            moveForward(500, 5000)
+            seek_bottle()
+            pair.run_forever(speed=500)
+            sleep(1)
         if sample()>black_average + black_stdev:
             pair.stop()
             break
+        else:
+            moveForward(500, 5000)
     Sound.speak("Victory! Take that bottle!")
     sleep(3)
 
